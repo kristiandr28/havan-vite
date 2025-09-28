@@ -1,0 +1,395 @@
+import React, { useEffect, useState, useCallback } from 'react'; // Tambahkan useCallback
+import axios from 'axios';
+import { useNavigate } from 'react-router-dom';
+// Hapus jwtDecode karena kita akan menggunakan user dari useAuth
+// import { jwtDecode } from 'jwt-decode';
+import { BiPlus, BiEdit, BiTrash, BiX, BiLoaderAlt } from 'react-icons/bi'; // Tambahkan BiX dan BiLoaderAlt
+import AdminHeader from '../components/AdminHeader';
+import Sidebar from '../components/Sidebar';
+import useAuth from '../hooks/useAuth'; // Import useAuth
+import { createPortal } from 'react-dom'; // Untuk modal kustom
+import { motion, AnimatePresence } from 'framer-motion'; // Untuk animasi modal
+import { modalVariants } from '../components/partials/modalVariants'; // Pastikan path benar
+
+function ManageLanguages() {
+  // Ambil state dan fungsi auth dari useAuth
+  const { user, authToken, isAuthenticated, isAuthReady, handleLogout } = useAuth();
+  const navigate = useNavigate();
+
+  const [languages, setLanguages] = useState([]);
+  const [error, setError] = useState('');
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  // State untuk modal Add/Edit Language
+  const [formModalOpen, setFormModalOpen] = useState(false); // Ganti nama agar tidak bentrok
+  const [isEdit, setIsEdit] = useState(false);
+  const [currentLanguage, setCurrentLanguage] = useState({
+    _id: '',
+    name: '',
+    code: '',
+  });
+
+  // State untuk modal konfirmasi Delete
+  const [confirmModalOpen, setConfirmModalOpen] = useState(false);
+  const [languageToDelete, setLanguageToDelete] = useState(null);
+
+  const BACKEND_URL = import.meta.env.VITE_API_URL; // Gunakan env variable
+
+  // --- Fetch Data Function (Dideklarasikan sebelum useEffect) ---
+  const fetchLanguages = useCallback(async () => {
+    try {
+      // Gunakan authToken dari useAuth
+      const response = await axios.get(`${BACKEND_URL}/api/languages`, {
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+      setLanguages(response.data);
+    } catch (err) {
+      let errorMessage = 'Failed to fetch languages';
+      if (err.response) {
+        errorMessage = err.response.data.message || `Error ${err.response.status}`;
+        // Jika error 401/403, mungkin token tidak valid, lakukan logout
+        if (err.response.status === 401 || err.response.status === 403) {
+          handleLogout();
+        }
+      } else if (err.request) {
+        errorMessage = 'No response from server. Check if backend is running.';
+      } else {
+        errorMessage = err.message;
+      }
+      setError(errorMessage);
+      console.error('Fetch languages error:', err);
+      console.error('Error details:', err.response?.data, err.response?.status);
+    }
+  }, [BACKEND_URL, authToken, handleLogout]); // Tambahkan authToken dan handleLogout ke dependencies
+
+  // --- Autentikasi dan Otorisasi (useEffect) ---
+  useEffect(() => {
+    // Tunggu sampai isAuthReady menjadi true
+    if (!isAuthReady) {
+      return; // Jangan lakukan apa-apa sampai auth siap
+    }
+
+    if (!isAuthenticated) {
+      navigate('/login'); // Redirect ke login jika tidak terautentikasi
+      return;
+    }
+
+    if (user?.role !== 'admin') { // Gunakan user dari useAuth
+      navigate('/'); // Redirect ke home jika bukan admin
+      return;
+    }
+
+    fetchLanguages();
+  }, [isAuthenticated, user, isAuthReady, navigate, authToken, fetchLanguages]); // Tambahkan fetchLanguages ke dependencies
+
+  const toggleSidebar = useCallback(() => {
+    setSidebarOpen(!sidebarOpen);
+  }, []);
+
+  // --- Modal Add/Edit Language ---
+  const openFormModal = useCallback((language = null) => {
+    if (language) {
+      setIsEdit(true);
+      setCurrentLanguage(language);
+    } else {
+      setIsEdit(false);
+      setCurrentLanguage({ _id: '', name: '', code: '' });
+    }
+    setFormModalOpen(true); // Menggunakan setFormModalOpen
+    setError(''); // Clear form-specific errors
+  }, []);
+
+  const closeFormModal = useCallback(() => {
+    setFormModalOpen(false); // Menggunakan setFormModalOpen
+    setError('');
+  }, []);
+
+  const handleInputChange = useCallback((e) => {
+    const { name, value } = e.target;
+    setCurrentLanguage((prev) => ({ ...prev, [name]: value }));
+  }, []);
+
+  const handleSubmit = useCallback(async (e) => {
+    e.preventDefault();
+    // Basic validation
+    if (!currentLanguage.name || !currentLanguage.code) {
+      setError('Name and Code are required.');
+      return;
+    }
+
+    try {
+      if (isEdit) {
+        const response = await axios.put(
+          `${BACKEND_URL}/api/languages/${currentLanguage._id}`,
+          currentLanguage,
+          { headers: { Authorization: `Bearer ${authToken}` } } // Gunakan authToken
+        );
+        setLanguages(
+          languages.map((lang) => (lang._id === currentLanguage._id ? response.data : lang))
+        );
+      } else {
+        const response = await axios.post(`${BACKEND_URL}/api/languages`, currentLanguage, {
+          headers: { Authorization: `Bearer ${authToken}` }, // Gunakan authToken
+        });
+        setLanguages([...languages, response.data]);
+      }
+      closeFormModal();
+      setError(''); // Clear global error on success
+    } catch (err) {
+      setError(err.response?.data.message || 'Failed to save language');
+      console.error('Submit error:', err.response?.data || err);
+      if (err.response?.status === 401 || err.response?.status === 403) {
+        handleLogout();
+      }
+    }
+  }, [isEdit, currentLanguage, BACKEND_URL, authToken, languages, closeFormModal, handleLogout]);
+
+  // --- Modal Konfirmasi Delete ---
+  const openConfirmModal = useCallback((language) => {
+    setLanguageToDelete(language);
+    setConfirmModalOpen(true);
+  }, []);
+
+  const closeConfirmModal = useCallback(() => {
+    setConfirmModalOpen(false);
+    setLanguageToDelete(null);
+  }, []);
+
+  const handleDelete = useCallback(async () => {
+    if (!languageToDelete) return; // Pastikan ada bahasa yang akan dihapus
+
+    try {
+      await axios.delete(`${BACKEND_URL}/api/languages/${languageToDelete._id}`, {
+        headers: { Authorization: `Bearer ${authToken}` }, // Gunakan authToken
+      });
+      setLanguages(languages.filter((lang) => lang._id !== languageToDelete._id));
+      closeConfirmModal(); // Tutup modal setelah berhasil
+      setError(''); // Clear global error on success
+    } catch (err) {
+      setError(err.response?.data.message || 'Failed to delete language');
+      console.error('Delete error:', err.response?.data || err);
+      if (err.response?.status === 401 || err.response?.status === 403) {
+        handleLogout();
+      }
+      closeConfirmModal(); // Tetap tutup modal meskipun ada error
+    }
+  }, [languageToDelete, BACKEND_URL, authToken, languages, closeConfirmModal, handleLogout]);
+
+  // --- Render Loading State ---
+  if (!isAuthReady) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100 text-havanaGray">
+        <BiLoaderAlt className="animate-spin text-5xl mb-4 text-havanaBlue" />
+        <p className="text-lg font-medium">Memuat autentikasi...</p>
+      </div>
+    );
+  }
+
+  // --- Render Component ---
+  return (
+    <div className="flex min-h-screen bg-gray-100">
+      <Sidebar isOpen={sidebarOpen} toggleSidebar={toggleSidebar} />
+      <div className="flex-1 md:ml-64">
+        <AdminHeader toggleSidebar={toggleSidebar} />
+        <div className="pt-20 max-w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          {error && (
+            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4" role="alert">
+              <strong className="font-bold">Error!</strong>
+              <span className="block sm:inline"> {error}</span>
+            </div>
+          )}
+          <div className="bg-white rounded-lg shadow-sm p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-xl font-semibold text-havanaGray">Manage Languages</h3>
+              <button
+                onClick={() => openFormModal()}
+                className="flex items-center bg-havanaBlue text-white py-1.5 px-3 rounded-md hover:bg-blue-700 transition"
+              >
+                <BiPlus className="mr-1" />
+                Add Language
+              </button>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Name
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Code
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {languages.length === 0 && !error ? (
+                    <tr>
+                      <td colSpan="3" className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center">
+                        No languages found.
+                      </td>
+                    </tr>
+                  ) : (
+                    languages.map((language) => (
+                      <tr key={language._id}>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {language.name}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {language.code}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                          <button
+                            onClick={() => openFormModal(language)}
+                            className="text-havanaBlue hover:text-blue-700 mr-4 transition"
+                            aria-label={`Edit language ${language.name}`}
+                          >
+                            <BiEdit className="text-lg" />
+                          </button>
+                          <button
+                            onClick={() => openConfirmModal(language)} // Membuka modal konfirmasi
+                            className="text-red-500 hover:text-red-700 transition"
+                            aria-label={`Delete language ${language.name}`}
+                          >
+                            <BiTrash className="text-lg" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        {/* Modal untuk Add/Edit Language */}
+        {formModalOpen &&
+          createPortal(
+            <AnimatePresence>
+              <motion.div
+                className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50 backdrop-blur-sm"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+              >
+                <motion.div
+                  className="relative bg-white rounded-lg p-6 w-full max-w-md shadow-xl"
+                  variants={modalVariants}
+                  initial="hidden"
+                  animate="visible"
+                  exit="exit"
+                >
+                  <button
+                    onClick={closeFormModal}
+                    className="absolute top-3 right-3 text-gray-500 hover:text-gray-700 transition-colors"
+                    aria-label="Close form modal"
+                  >
+                    <BiX className="text-2xl" />
+                  </button>
+                  <h3 className="text-lg font-semibold text-havanaGray mb-4">
+                    {isEdit ? 'Edit Language' : 'Add Language'}
+                  </h3>
+                  <form onSubmit={handleSubmit} className="space-y-4">
+                    <div>
+                      <label htmlFor="languageName" className="block text-sm font-medium text-gray-700">Name</label>
+                      <input
+                        type="text"
+                        id="languageName"
+                        name="name"
+                        value={currentLanguage.name}
+                        onChange={handleInputChange}
+                        className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-havanaBlue focus:border-havanaBlue sm:text-sm"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="languageCode" className="block text-sm font-medium text-gray-700">Code</label>
+                      <input
+                        type="text"
+                        id="languageCode"
+                        name="code"
+                        value={currentLanguage.code}
+                        onChange={handleInputChange}
+                        className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-havanaBlue focus:border-havanaBlue sm:text-sm"
+                        required
+                      />
+                    </div>
+                    <div className="flex justify-end space-x-2 pt-4 border-t"> {/* Added pt-4 border-t */}
+                      <button
+                        type="button"
+                        onClick={closeFormModal}
+                        className="py-2 px-4 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 transition"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        className="py-2 px-4 bg-havanaBlue text-white rounded-md hover:bg-blue-700 transition"
+                      >
+                        {isEdit ? 'Update' : 'Create'}
+                      </button>
+                    </div>
+                  </form>
+                </motion.div>
+              </motion.div>
+            </AnimatePresence>,
+            document.body
+          )}
+
+        {/* Modal Konfirmasi Delete */}
+        {confirmModalOpen &&
+          createPortal(
+            <AnimatePresence>
+              <motion.div
+                className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50 backdrop-blur-sm"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+              >
+                <motion.div
+                  className="relative bg-white rounded-lg p-6 w-full max-w-sm shadow-xl text-center"
+                  variants={modalVariants}
+                  initial="hidden"
+                  animate="visible"
+                  exit="exit"
+                >
+                  <button
+                    onClick={closeConfirmModal}
+                    className="absolute top-3 right-3 text-gray-500 hover:text-gray-700 transition-colors"
+                    aria-label="Close confirmation modal"
+                  >
+                    <BiX className="text-2xl" />
+                  </button>
+                  <h3 className="text-xl font-semibold text-red-600 mb-4">Konfirmasi Hapus</h3>
+                  <p className="text-gray-700 mb-6">
+                    Apakah Anda yakin ingin menghapus bahasa <strong>{languageToDelete?.name} ({languageToDelete?.code})</strong>?
+                    Tindakan ini tidak dapat dibatalkan.
+                  </p>
+                  <div className="flex justify-center space-x-4">
+                    <button
+                      onClick={closeConfirmModal}
+                      className="py-2 px-4 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 transition"
+                    >
+                      Batal
+                    </button>
+                    <button
+                      onClick={handleDelete}
+                      className="py-2 px-4 bg-red-500 text-white rounded-md hover:bg-red-600 transition"
+                    >
+                      Hapus
+                    </button>
+                  </div>
+                </motion.div>
+              </motion.div>
+            </AnimatePresence>,
+            document.body
+          )}
+      </div>
+    </div>
+  );
+}
+
+export default ManageLanguages;
