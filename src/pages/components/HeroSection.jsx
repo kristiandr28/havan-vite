@@ -1,6 +1,6 @@
 import React from "react";
-import { AnimatePresence, motion } from 'framer-motion';
-import { BiChevronLeft, BiChevronRight, BiChevronDown } from 'react-icons/bi';
+import { AnimatePresence, motion } from "framer-motion";
+import { BiChevronLeft, BiChevronRight, BiChevronDown } from "react-icons/bi";
 
 const slideVariants = {
   initial: { opacity: 0 },
@@ -40,7 +40,8 @@ function HeroSection({
                 alt={heroes[currentHero].title}
                 className="w-full h-full object-cover"
                 onError={(e) => {
-                  e.target.src = 'https://www.shorekids.co.nz/wp-content/uploads/2014/08/image-placeholder.jpg';
+                  e.target.src =
+                    "https://www.shorekids.co.nz/wp-content/uploads/2014/08/image-placeholder.jpg";
                 }}
               />
               <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/30 to-black/80 backdrop-blur-sm flex items-center justify-center px-4 text-center">
@@ -100,7 +101,7 @@ function HeroSection({
                     key={index}
                     onClick={() => goToHero(index)}
                     className={`w-2.5 h-2.5 rounded-full ${
-                      index === currentHero ? 'bg-havanaPink' : 'bg-white/40'
+                      index === currentHero ? "bg-havanaPink" : "bg-white/40"
                     }`}
                     aria-label={`Go to slide ${index + 1}`}
                   />
@@ -122,8 +123,20 @@ function HeroSection({
           </motion.div>
         </div>
       ) : (
-        <div className="bg-havanaBlue w-full min-h-screen flex items-center justify-center px-4 text-center text-white">
-          <div className="max-w-4xl">
+        // ✅ Fallback jika tidak ada data heroes
+        <div
+          className="relative w-full min-h-screen flex items-center justify-center px-4 text-center text-white"
+          style={{
+            backgroundImage: `url('/public/images/hero-backend.jpg')`,
+            backgroundSize: "cover",
+            backgroundPosition: "center",
+          }}
+        >
+          {/* Overlay gelap agar teks tetap terbaca */}
+          <div className="absolute inset-0 bg-black/60"></div>
+
+          {/* Konten fallback */}
+          <div className="relative max-w-4xl z-10">
             <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold mb-4">
               Discover Your Next Adventure
             </h1>
@@ -132,7 +145,7 @@ function HeroSection({
             </p>
             <a
               href="/tours"
-              className="inline-block bg-havanaPink text-white py-3 px-6 rounded-md hover:bg-pink-700 text-base sm:text-lg"
+              className="inline-block bg-havanaPink text-white py-3 px-6 rounded-md hover:bg-pink-700 text-base sm:text-lg transition-all duration-300"
             >
               Explore Tours
             </a>
