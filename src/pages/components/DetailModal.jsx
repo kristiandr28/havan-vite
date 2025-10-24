@@ -75,22 +75,28 @@ function DetailModal({
   addToCart,
   openDetailModal,
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [isBookModalOpen, setIsBookModal] = useState(false);
   const [relatedTours, setRelatedTours] = useState([]);
   const [relatedTickets, setRelatedTickets] = useState([]);
   const [isLoadingRelated, setIsLoadingRelated] = useState(false);
+
 
   useEffect(() => {
     if (isOpen && modalType === 'destination' && selectedItem?._id) {
       const fetchRelatedItems = async () => {
         setIsLoadingRelated(true);
         try {
-          const response = await fetch(`${BACKEND_URL}/api/destinations/details/${selectedItem._id}?lang=${t('languageCode')}`);
-          if (!response.ok) {
-            throw new Error('Failed to fetch related items');
-          }
-          const data = await response.json();
+          const lang = i18n.language || 'en';
+          const res = await fetch(`${BACKEND_URL}/api/destinations/details/${selectedItem._id}?lang=${lang}`);
+          if (!res.ok) throw new Error('Failed to fetch related items');
+          const data = await res.json();
+
+          selectedItem.name = data.destination.name;
+          selectedItem.description = data.destination.description;
+          selectedItem.location = data.destination.location;
+          selectedItem.image = data.destination.image;
+
           setRelatedTours(data.relatedTours || []);
           setRelatedTickets(data.relatedTickets || []);
         } catch (error) {
@@ -104,7 +110,7 @@ function DetailModal({
 
       fetchRelatedItems();
     }
-  }, [isOpen, modalType, selectedItem, BACKEND_URL, t]);
+  }, [isOpen, modalType, selectedItem, BACKEND_URL, i18n.language]);
 
   if (!isOpen || !selectedItem) return null;
 
@@ -234,23 +240,30 @@ function DetailModal({
                           {getTranslatedName(selectedItem.location)}
                         </p>
                       </div>
-                      <div>
-                        <h4 className="text-lg sm:text-base font-semibold text-havanaGray">{t('modals.detail.relatedTours')}</h4>
-                        {isLoadingRelated ? (
-                          <p className="text-havanaGray text-sm">{t('general.loading')}</p>
-                        ) : relatedTours.length > 0 ? (
-                          <ul className="list-none space-y-2 pl-0">
-                            {relatedTours.map((tour) => (
-                              <li key={tour._id} className="flex items-center space-x-2 p-2 bg-gray-100 rounded-lg cursor-pointer hover:bg-gray-200 transition-colors duration-200" onClick={() => handleItemClick(tour, 'tour')}>
-                                <FaRoute className="text-havanaBlue text-xl" />
-                                <span className="font-medium text-havanaGray">{getTranslatedName(tour)}</span>
-                              </li>
-                            ))}
-                          </ul>
-                        ) : (
-                          <p className="text-havanaGray text-sm">{t('general.noRelatedTours')}</p>
-                        )}
-                      </div>
+                    <div>
+                      <h4 className="text-lg sm:text-base font-semibold text-havanaGray">
+                        {t('modals.detail.relatedTours')}
+                      </h4>
+                      {isLoadingRelated ? (
+                        <p className="text-havanaGray text-sm">{t('general.loading')}</p>
+                      ) : relatedTours.length > 0 ? (
+                        <ul className="list-none space-y-2 pl-0">
+                          {relatedTours.map((tour) => (
+                            <li
+                              key={tour._id}
+                              className="flex items-center space-x-2 p-2 bg-gray-100 rounded-lg cursor-pointer hover:bg-gray-200 transition-colors duration-200"
+                              onClick={() => handleItemClick(tour, 'tour')}
+                            >
+                              <FaRoute className="text-havanaBlue text-xl" />
+                              <span className="font-medium text-havanaGray">{tour.name}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="text-havanaGray text-sm">{t('general.noRelatedTours')}</p>
+                      )}
+                    </div>
+
                       <div>
                         <h4 className="text-lg sm:text-base font-semibold text-havanaGray">{t('modals.detail.relatedTickets')}</h4>
                         {isLoadingRelated ? (

@@ -1,13 +1,12 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import axios from 'axios';
 import { BiMap } from 'react-icons/bi';
-import { FaFilter, FaTimes, FaAngleLeft, FaAngleRight } from 'react-icons/fa'; // Import icons for pagination
+import { FaFilter, FaTimes, FaAngleLeft, FaAngleRight } from 'react-icons/fa';
 import { useTranslation } from 'react-i18next';
 import { motion } from 'framer-motion';
 import SidebarFilter from '../components/SidebarFilter';
 
-// --- (useDebounce and TourCard remain the same) ---
-
+// --- Debounce Hook ---
 const useDebounce = (value, delay) => {
   const [debouncedValue, setDebouncedValue] = useState(value);
   useEffect(() => {
@@ -19,6 +18,7 @@ const useDebounce = (value, delay) => {
   return debouncedValue;
 };
 
+// --- Tour Card Component ---
 const TourCard = ({ tour, effectiveBackendUrl, activeCurrency, openDetailModal, t }) => (
   <motion.div
     key={tour._id}
@@ -74,8 +74,7 @@ const TourCard = ({ tour, effectiveBackendUrl, activeCurrency, openDetailModal, 
   </motion.div>
 );
 
-// --- (Pagination component) ---
-
+// --- Pagination Component ---
 const Pagination = ({ currentPage, totalPages, onPageChange }) => {
   if (totalPages <= 1) return null;
 
@@ -88,12 +87,11 @@ const Pagination = ({ currentPage, totalPages, onPageChange }) => {
     pages.push(i);
   }
 
-  // Adjust start/end if we are near the totalPages
   if (endPage - startPage + 1 < maxPagesToShow && startPage > 1) {
     const newStart = Math.max(1, endPage - maxPagesToShow + 1);
-    pages.length = 0; // Clear the array
+    pages.length = 0;
     for (let i = newStart; i <= endPage; i++) {
-        pages.push(i);
+      pages.push(i);
     }
   }
 
@@ -113,51 +111,61 @@ const Pagination = ({ currentPage, totalPages, onPageChange }) => {
 
   return (
     <div className="flex justify-center items-center mt-8 space-x-2">
-      <PageButton page={currentPage - 1} isActive={false} disabled={currentPage === 1} onPageChange={onPageChange}>
+      <PageButton
+        page={currentPage - 1}
+        isActive={false}
+        disabled={currentPage === 1}
+      >
         <FaAngleLeft />
       </PageButton>
 
-      {/* Show first page if not in view */}
       {pages[0] > 1 && (
         <>
-          <PageButton page={1} isActive={currentPage === 1} onPageChange={onPageChange} />
+          <PageButton page={1} isActive={currentPage === 1} />
           {pages[0] > 2 && <span className="text-gray-500">...</span>}
         </>
       )}
 
-      {/* Render visible pages */}
       {pages.map((page) => (
-        <PageButton key={page} page={page} isActive={currentPage === page} onPageChange={onPageChange} />
+        <PageButton key={page} page={page} isActive={currentPage === page} />
       ))}
 
-      {/* Show last page if not in view */}
       {pages[pages.length - 1] < totalPages && (
         <>
-          {pages[pages.length - 1] < totalPages - 1 && <span className="text-gray-500">...</span>}
-          <PageButton page={totalPages} isActive={currentPage === totalPages} onPageChange={onPageChange} />
+          {pages[pages.length - 1] < totalPages - 1 && (
+            <span className="text-gray-500">...</span>
+          )}
+          <PageButton
+            page={totalPages}
+            isActive={currentPage === totalPages}
+          />
         </>
       )}
 
-      <PageButton page={currentPage + 1} isActive={false} disabled={currentPage === totalPages} onPageChange={onPageChange}>
+      <PageButton
+        page={currentPage + 1}
+        isActive={false}
+        disabled={currentPage === totalPages}
+      >
         <FaAngleRight />
       </PageButton>
     </div>
   );
 };
 
-// --- (Tours component) ---
-
+// --- Tours Page Component ---
 function Tours({ openDetailModal, activeCurrency }) {
   const { t, i18n } = useTranslation();
   const [tours, setTours] = useState([]);
   const [error, setError] = useState('');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
-  // 🔹 Pagination State
+  // Pagination
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-  const itemsPerPage = 6; // Set your desired items per page
+  const itemsPerPage = 6;
 
+  // Filter state
   const [filters, setFilters] = useState({
     search: '',
     languages: '',
@@ -170,51 +178,37 @@ function Tours({ openDetailModal, activeCurrency }) {
     duration: '',
   });
 
-  const [filterOptions, setFilterOptions] = useState({
-    tourTypes: [],
-    guideLanguages: [],
-    destinations: [],
-    durations: [],
-  });
-
   const effectiveBackendUrl = import.meta.env.VITE_API_URL;
   const debouncedFilters = useDebounce(filters, 500);
   const firstRender = useRef(true);
 
-  // 🔹 Fetch tours (Updated to include pagination)
+  // --- Fetch Tours with Pagination & Filters ---
   const fetchData = useCallback(async () => {
     setError('');
-    // Scroll to top of results on fetch
-    window.scrollTo({ top: 0, behavior: 'smooth' }); 
+    window.scrollTo({ top: 0, behavior: 'smooth' });
 
     try {
       const currentLang = i18n.language || 'en';
-      const queryParams = new URLSearchParams({
-        // ➡️ Add pagination parameters
-        page: currentPage, 
+      const queryObj = {
+        page: currentPage,
         limit: itemsPerPage,
-        // ⬅️ Pagination parameters end
-        search: debouncedFilters.search,
-        languages: debouncedFilters.languages,
-        destinations: debouncedFilters.destinations,
-        minPrice: debouncedFilters.minPrice,
-        maxPrice: debouncedFilters.maxPrice,
-        minPax: debouncedFilters.minPax,
-        maxPax: debouncedFilters.maxPax,
-        tourType: debouncedFilters.tourType,
-        duration: debouncedFilters.duration,
         lang: currentLang,
-      }).toString();
+      };
 
+      // ✅ Tambahkan hanya filter yang punya nilai
+      for (const key in debouncedFilters) {
+        if (debouncedFilters[key]) queryObj[key] = debouncedFilters[key];
+      }
+
+      const queryParams = new URLSearchParams(queryObj).toString();
       const response = await axios.get(`${effectiveBackendUrl}/api/tours?${queryParams}`);
 
       if (response.data && Array.isArray(response.data.tours)) {
         setTours(response.data.tours);
-        // ➡️ Update total pages from API response
-        setTotalPages(response.data.totalPages || 1); 
+        setTotalPages(response.data.totalPages || 1);
       } else {
         setTours([]);
-        setTotalPages(1); // Reset total pages if no data
+        setTotalPages(1);
       }
     } catch (err) {
       setError(t('toursPage.failedToFetch'));
@@ -222,30 +216,9 @@ function Tours({ openDetailModal, activeCurrency }) {
       setTours([]);
       setTotalPages(1);
     }
-  }, [i18n.language, effectiveBackendUrl, debouncedFilters, currentPage, itemsPerPage, t]); // Add currentPage to dependencies
+  }, [i18n.language, effectiveBackendUrl, debouncedFilters, currentPage, itemsPerPage, t]);
 
-  // 🔹 Fetch filter options (Unchanged)
-  useEffect(() => {
-    const fetchFilterOptions = async () => {
-      try {
-        const response = await axios.get(`${effectiveBackendUrl}/api/tours/filters`);
-        if (response.data) {
-          setFilterOptions({
-            tourTypes: response.data.tourTypes || [],
-            guideLanguages: response.data.guideLanguages || [],
-            destinations: response.data.destinations || [],
-            durations: response.data.durations || [],
-          });
-        }
-      } catch (err) {
-        console.error('Failed to fetch filter options:', err.response?.data || err.message);
-      }
-    };
-
-    fetchFilterOptions();
-  }, [effectiveBackendUrl]);
-
-  // 🔹 Fetch tours on mount & filter/page change
+  // --- Fetch on mount & filter/page change ---
   useEffect(() => {
     if (firstRender.current) {
       firstRender.current = false;
@@ -255,23 +228,44 @@ function Tours({ openDetailModal, activeCurrency }) {
     }
   }, [fetchData]);
 
-  // 🔹 Handle filter change (Reset page to 1 when filters change)
+  // --- Handle Filter Changes ---
   const handleFilterChange = useCallback((newFilters) => {
+    if (Object.keys(newFilters).length === 0) {
+      // Reset all filters
+      setFilters({
+        search: '',
+        languages: '',
+        destinations: '',
+        minPrice: '',
+        maxPrice: '',
+        minPax: '',
+        maxPax: '',
+        tourType: '',
+        duration: '',
+      });
+      setCurrentPage(1);
+      return;
+    }
+
     setFilters((prevFilters) => ({ ...prevFilters, ...newFilters }));
-    setCurrentPage(1); // 💡 Crucial: Reset page on filter change
+    setCurrentPage(1);
   }, []);
 
-  // 🔹 Handle page change
-  const handlePageChange = useCallback((page) => {
-    if (page >= 1 && page <= totalPages) {
-      setCurrentPage(page);
-    }
-  }, [totalPages]);
+  // --- Handle Pagination ---
+  const handlePageChange = useCallback(
+    (page) => {
+      if (page >= 1 && page <= totalPages) {
+        setCurrentPage(page);
+      }
+    },
+    [totalPages]
+  );
 
   const toggleSidebar = () => {
     setIsSidebarOpen(!isSidebarOpen);
   };
 
+  // --- Render ---
   return (
     <div className="min-h-screen bg-gray-100 pt-16">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -290,18 +284,14 @@ function Tours({ openDetailModal, activeCurrency }) {
             {isSidebarOpen ? t('toursPage.closeFilters') : t('toursPage.allFilters')}
           </button>
         </div>
-        
-        {/* --- Main Content and Sidebar --- */}
+
+        {/* --- Main Content --- */}
         <div className="flex flex-col lg:flex-row gap-6 relative">
           <SidebarFilter
-            type="tours"
+            type="tour"
             onFilterChange={handleFilterChange}
             isOpen={isSidebarOpen}
             setIsOpen={setIsSidebarOpen}
-            tourTypes={filterOptions.tourTypes}
-            ticketTypes={filterOptions.guideLanguages}
-            destinations={filterOptions.destinations}
-            durations={filterOptions.durations}
           />
 
           <div className={`flex-grow ${isSidebarOpen ? 'lg:w-3/4' : 'lg:w-full'} relative`}>
@@ -323,8 +313,8 @@ function Tours({ openDetailModal, activeCurrency }) {
                 ))
               )}
             </div>
-            
-            {/* ➡️ Pagination Controls */}
+
+            {/* Pagination */}
             {tours.length > 0 && totalPages > 1 && (
               <Pagination
                 currentPage={currentPage}
@@ -332,8 +322,6 @@ function Tours({ openDetailModal, activeCurrency }) {
                 onPageChange={handlePageChange}
               />
             )}
-            {/* ⬅️ Pagination Controls End */}
-            
           </div>
         </div>
       </div>
